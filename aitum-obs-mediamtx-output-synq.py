@@ -24,24 +24,24 @@ WS_PASSWORD = os.getenv("WS_PASSWORD", "")
 OUTPUT_NAME = "DELAY"
 
 MEDIAMTX_DIR = os.path.join(
-    SCRIPT_DIR,
-    "mediamtx"
+  SCRIPT_DIR,
+  "mediamtx"
 )
 
 MEDIAMTX_BIN_NAME = (
-    "mediamtx.exe"
-    if sys.platform == "win32"
-    else "mediamtx"
+  "mediamtx.exe"
+  if sys.platform == "win32"
+  else "mediamtx"
 )
 
 MEDIAMTX_BIN = os.path.join(
-    MEDIAMTX_DIR,
-    MEDIAMTX_BIN_NAME
+  MEDIAMTX_DIR,
+  MEDIAMTX_BIN_NAME
 )
 
 MEDIAMTX_CONFIG = os.path.join(
-    MEDIAMTX_DIR,
-    "mediamtx.yml"
+  MEDIAMTX_DIR,
+  "mediamtx.yml"
 )
 
 MEDIAMTX_CWD = MEDIAMTX_DIR
@@ -57,9 +57,9 @@ EVENTSUB_OUTPUTS = 1 << 6
 EVENTSUB_VENDORS = 1 << 9
 
 EVENTSUB_MASK = (
-    EVENTSUB_GENERAL
-    | EVENTSUB_OUTPUTS
-    | EVENTSUB_VENDORS
+  EVENTSUB_GENERAL
+  | EVENTSUB_OUTPUTS
+  | EVENTSUB_VENDORS
 )
 
 AITUM_VENDOR_NAME = "aitum-stream-suite"
@@ -76,464 +76,464 @@ current_state = None
 
 
 def log(msg):
-    print(f"{LOG_PREFIX} {msg}")
+  print(f"{LOG_PREFIX} {msg}")
 
 
 def authenticate(hello):
-    auth = hello["d"]["authentication"]
+  auth = hello["d"]["authentication"]
 
-    salt = auth["salt"]
-    challenge = auth["challenge"]
+  salt = auth["salt"]
+  challenge = auth["challenge"]
 
-    secret = hashlib.sha256(
-        (WS_PASSWORD + salt).encode("utf-8")
-    ).digest()
+  secret = hashlib.sha256(
+    (WS_PASSWORD + salt).encode("utf-8")
+  ).digest()
 
-    secret_b64 = base64.b64encode(
-        secret
-    ).decode("utf-8")
+  secret_b64 = base64.b64encode(
+    secret
+  ).decode("utf-8")
 
-    auth_hash = hashlib.sha256(
-        (secret_b64 + challenge).encode("utf-8")
-    ).digest()
+  auth_hash = hashlib.sha256(
+    (secret_b64 + challenge).encode("utf-8")
+  ).digest()
 
-    return base64.b64encode(
-        auth_hash
-    ).decode("utf-8")
+  return base64.b64encode(
+    auth_hash
+  ).decode("utf-8")
 
 
 def connect_and_identify():
-    ws = websocket.create_connection(
-        f"ws://{WS_HOST}:{WS_PORT}",
-        timeout=5
-    )
+  ws = websocket.create_connection(
+    f"ws://{WS_HOST}:{WS_PORT}",
+    timeout=5
+  )
 
-    hello = json.loads(
-        ws.recv()
-    )
+  hello = json.loads(
+    ws.recv()
+  )
 
-    identify = {
-        "op": 1,
-        "d": {
-            "rpcVersion": hello["d"]["rpcVersion"],
-            "eventSubscriptions": EVENTSUB_MASK
-        }
+  identify = {
+    "op": 1,
+    "d": {
+      "rpcVersion": hello["d"]["rpcVersion"],
+      "eventSubscriptions": EVENTSUB_MASK
     }
+  }
 
-    if "authentication" in hello["d"]:
-        identify["d"]["authentication"] = (
-            authenticate(hello)
-        )
-
-    ws.send(
-        json.dumps(identify)
+  if "authentication" in hello["d"]:
+    identify["d"]["authentication"] = (
+      authenticate(hello)
     )
 
-    identified = json.loads(
-        ws.recv()
+  ws.send(
+    json.dumps(identify)
+  )
+
+  identified = json.loads(
+    ws.recv()
+  )
+
+  if identified.get("op") != 2:
+    raise Exception(
+      "OBS WebSocket authentication failed"
     )
 
-    if identified.get("op") != 2:
-        raise Exception(
-            "OBS WebSocket authentication failed"
-        )
-
-    return ws
+  return ws
 
 
 def start_mediamtx():
-    global mediamtx_process
+  global mediamtx_process
 
-    with mediamtx_lock:
-        if (
-            mediamtx_process is not None
-            and mediamtx_process.poll() is None
-        ):
-            log(
-                "mediamtx is already running, "
-                "skipping start"
-            )
-            return
+  with mediamtx_lock:
+    if (
+      mediamtx_process is not None
+      and mediamtx_process.poll() is None
+    ):
+      log(
+        "mediamtx is already running, "
+        "skipping start"
+      )
+      return
 
-        if not os.path.isfile(MEDIAMTX_BIN):
-            log(
-                f"ERROR: mediamtx executable not found at "
-                f"'{MEDIAMTX_BIN}'"
-            )
-            return
+    if not os.path.isfile(MEDIAMTX_BIN):
+      log(
+        f"ERROR: mediamtx executable not found at "
+        f"'{MEDIAMTX_BIN}'"
+      )
+      return
 
-        if not os.path.isfile(MEDIAMTX_CONFIG):
-            log(
-                f"ERROR: mediamtx.yml not found at "
-                f"'{MEDIAMTX_CONFIG}'"
-            )
-            return
+    if not os.path.isfile(MEDIAMTX_CONFIG):
+      log(
+        f"ERROR: mediamtx.yml not found at "
+        f"'{MEDIAMTX_CONFIG}'"
+      )
+      return
 
-        cmd = [
-            MEDIAMTX_BIN,
-            MEDIAMTX_CONFIG
-        ]
+    cmd = [
+      MEDIAMTX_BIN,
+      MEDIAMTX_CONFIG
+    ]
 
-        kwargs = {
-            "cwd": MEDIAMTX_CWD,
-            "stdout": subprocess.DEVNULL,
-            "stderr": subprocess.DEVNULL,
-        }
+    kwargs = {
+      "cwd": MEDIAMTX_CWD,
+      "stdout": subprocess.DEVNULL,
+      "stderr": subprocess.DEVNULL,
+    }
 
-        if sys.platform == "win32":
-            kwargs["creationflags"] = (
-                subprocess.CREATE_NO_WINDOW
-            )
-        else:
-            kwargs["preexec_fn"] = os.setsid
+    if sys.platform == "win32":
+      kwargs["creationflags"] = (
+        subprocess.CREATE_NO_WINDOW
+      )
+    else:
+      kwargs["preexec_fn"] = os.setsid
 
-        try:
-            log(
-                f"Starting mediamtx: {cmd} "
-                f"(cwd={MEDIAMTX_CWD})"
-            )
+    try:
+      log(
+        f"Starting mediamtx: {cmd} "
+        f"(cwd={MEDIAMTX_CWD})"
+      )
 
-            mediamtx_process = subprocess.Popen(
-                cmd,
-                **kwargs
-            )
+      mediamtx_process = subprocess.Popen(
+        cmd,
+        **kwargs
+      )
 
-            log(
-                f"mediamtx started with PID "
-                f"{mediamtx_process.pid}"
-            )
+      log(
+        f"mediamtx started with PID "
+        f"{mediamtx_process.pid}"
+      )
 
-        except Exception as e:
-            log(
-                f"ERROR starting mediamtx: "
-                f"{type(e).__name__}: {e}"
-            )
+    except Exception as e:
+      log(
+        f"ERROR starting mediamtx: "
+        f"{type(e).__name__}: {e}"
+      )
 
-            mediamtx_process = None
+      mediamtx_process = None
 
 
 def stop_mediamtx():
-    global mediamtx_process
+  global mediamtx_process
 
-    with mediamtx_lock:
-        if (
-            mediamtx_process is None
-            or mediamtx_process.poll() is not None
-        ):
-            log(
-                "mediamtx is not running, "
-                "nothing to stop"
-            )
+  with mediamtx_lock:
+    if (
+      mediamtx_process is None
+      or mediamtx_process.poll() is not None
+    ):
+      log(
+        "mediamtx is not running, "
+        "nothing to stop"
+      )
 
-            mediamtx_process = None
+      mediamtx_process = None
 
-            return
+      return
 
-        pid = mediamtx_process.pid
+    pid = mediamtx_process.pid
 
-        log(
-            f"Stopping mediamtx (PID {pid})..."
+    log(
+      f"Stopping mediamtx (PID {pid})..."
+    )
+
+    try:
+      if sys.platform == "win32":
+        mediamtx_process.terminate()
+      else:
+        os.killpg(
+          os.getpgid(pid),
+          signal.SIGTERM
         )
 
-        try:
-            if sys.platform == "win32":
-                mediamtx_process.terminate()
-            else:
-                os.killpg(
-                    os.getpgid(pid),
-                    signal.SIGTERM
-                )
+      mediamtx_process.wait(
+        timeout=MEDIAMTX_STOP_TIMEOUT
+      )
 
-            mediamtx_process.wait(
-                timeout=MEDIAMTX_STOP_TIMEOUT
-            )
+      log(
+        "mediamtx stopped successfully"
+      )
 
-            log(
-                "mediamtx stopped successfully"
-            )
+    except subprocess.TimeoutExpired:
+      log(
+        "mediamtx did not stop in time, "
+        "forcing kill"
+      )
 
-        except subprocess.TimeoutExpired:
-            log(
-                "mediamtx did not stop in time, "
-                "forcing kill"
-            )
+      try:
+        mediamtx_process.kill()
 
-            try:
-                mediamtx_process.kill()
+        mediamtx_process.wait(
+          timeout=2
+        )
 
-                mediamtx_process.wait(
-                    timeout=2
-                )
+        log(
+          "mediamtx force-killed successfully"
+        )
 
-                log(
-                    "mediamtx force-killed successfully"
-                )
+      except Exception as e:
+        log(
+          f"ERROR force-killing mediamtx: "
+          f"{type(e).__name__}: {e}"
+        )
 
-            except Exception as e:
-                log(
-                    f"ERROR force-killing mediamtx: "
-                    f"{type(e).__name__}: {e}"
-                )
+    except Exception as e:
+      log(
+        f"ERROR stopping mediamtx: "
+        f"{type(e).__name__}: {e}"
+      )
 
-        except Exception as e:
-            log(
-                f"ERROR stopping mediamtx: "
-                f"{type(e).__name__}: {e}"
-            )
-
-        finally:
-            mediamtx_process = None
+    finally:
+      mediamtx_process = None
 
 
 def handle_event(msg):
-    global current_state
+  global current_state
 
-    d = msg.get(
-        "d",
-        {}
-    )
+  d = msg.get(
+    "d",
+    {}
+  )
 
-    event_type = d.get(
-        "eventType"
-    )
+  event_type = d.get(
+    "eventType"
+  )
 
-    event_data = d.get(
-        "eventData",
-        {}
-    )
+  event_data = d.get(
+    "eventData",
+    {}
+  )
 
-    if event_type != "VendorEvent":
-        return
+  if event_type != "VendorEvent":
+    return
 
-    if event_data.get(
-        "vendorName"
-    ) != AITUM_VENDOR_NAME:
-        return
+  if event_data.get(
+    "vendorName"
+  ) != AITUM_VENDOR_NAME:
+    return
 
-    inner_data = event_data.get(
-        "eventData",
-        {}
-    )
+  inner_data = event_data.get(
+    "eventData",
+    {}
+  )
 
-    aitum_event_type = event_data.get(
-        "eventType"
-    )
+  aitum_event_type = event_data.get(
+    "eventType"
+  )
 
-    output = inner_data.get(
-        "output",
-        ""
-    )
+  output = inner_data.get(
+    "output",
+    ""
+  )
 
-    log(
-        f"Aitum event: "
-        f"type={aitum_event_type!r}, "
-        f"output={output!r}"
-    )
+  log(
+    f"Aitum event: "
+    f"type={aitum_event_type!r}, "
+    f"output={output!r}"
+  )
 
-    if aitum_event_type == "start_output":
+  if aitum_event_type == "start_output":
 
-        if (
-            output.strip().lower()
-            != OUTPUT_NAME.strip().lower()
-        ):
-            return
+    if (
+      output.strip().lower()
+      != OUTPUT_NAME.strip().lower()
+    ):
+      return
 
-        if current_state is True:
-            return
+    if current_state is True:
+      return
 
-        current_state = True
-
-        log(
-            f"Streaming STARTED on "
-            f"'{OUTPUT_NAME}'"
-        )
-
-        start_mediamtx()
-
-        return
-
-    if aitum_event_type == "stop_output":
-
-        if current_state is False:
-            return
-
-        current_state = False
-
-        log(
-            f"Streaming STOPPED on "
-            f"'{OUTPUT_NAME}'"
-        )
-
-        stop_mediamtx()
-
-        return
-
-
-def listen_loop():
-    global ws_conn
-
-    delay = RECONNECT_MIN_DELAY
-
-    while not stop_event.is_set():
-
-        try:
-            log(
-                f"Connecting to OBS WebSocket "
-                f"({WS_HOST}:{WS_PORT})..."
-            )
-
-            ws_conn = connect_and_identify()
-
-            log(
-                "Connected and subscribed to events."
-            )
-
-            delay = RECONNECT_MIN_DELAY
-
-            ws_conn.settimeout(
-                1.0
-            )
-
-            while not stop_event.is_set():
-
-                try:
-                    raw = ws_conn.recv()
-
-                except websocket.WebSocketTimeoutException:
-                    continue
-
-                if not raw:
-                    raise ConnectionError(
-                        "Connection closed by OBS"
-                    )
-
-                try:
-                    msg = json.loads(
-                        raw
-                    )
-
-                except json.JSONDecodeError:
-                    continue
-
-                if msg.get("op") == 5:
-                    handle_event(msg)
-
-        except Exception as e:
-
-            if not stop_event.is_set():
-                log(
-                    f"Connection lost/failed: "
-                    f"{e!r}. "
-                    f"Retrying in {delay}s..."
-                )
-
-        finally:
-
-            if ws_conn:
-                try:
-                    ws_conn.close()
-                except Exception:
-                    pass
-
-                ws_conn = None
-
-        if stop_event.wait(
-            delay
-        ):
-            break
-
-        delay = min(
-            delay * 2,
-            RECONNECT_MAX_DELAY
-        )
-
-
-def script_load(settings):
-    global ws_thread
-
-    print("")
-    print(
-        f"{LOG_PREFIX} ==========================="
-    )
-    print(
-        f"{LOG_PREFIX} MEDIAMTX AUTO START/STOP"
-    )
-    print(
-        f"{LOG_PREFIX} ==========================="
-    )
-
-    if not WS_PASSWORD:
-        log(
-            "WARNING: WS_PASSWORD is not configured"
-        )
-
-    if not os.path.isfile(MEDIAMTX_BIN):
-        log(
-            f"WARNING: mediamtx not found at "
-            f"'{MEDIAMTX_BIN}'"
-        )
-
-    if not os.path.isfile(MEDIAMTX_CONFIG):
-        log(
-            f"WARNING: mediamtx.yml not found at "
-            f"'{MEDIAMTX_CONFIG}'"
-        )
+    current_state = True
 
     log(
-        f"WebSocket: {WS_HOST}:{WS_PORT}"
+      f"Streaming STARTED on "
+      f"'{OUTPUT_NAME}'"
     )
+
+    start_mediamtx()
+
+    return
+
+  if aitum_event_type == "stop_output":
+
+    if current_state is False:
+      return
+
+    current_state = False
 
     log(
-        f"Watched output: '{OUTPUT_NAME}'"
+      f"Streaming STOPPED on "
+      f"'{OUTPUT_NAME}'"
     )
-
-    log(
-        f"MediaMTX executable: "
-        f"'{MEDIAMTX_BIN}'"
-    )
-
-    log(
-        f"MediaMTX config: "
-        f"'{MEDIAMTX_CONFIG}'"
-    )
-
-    stop_event.clear()
-
-    ws_thread = threading.Thread(
-        target=listen_loop,
-        daemon=True
-    )
-
-    ws_thread.start()
-
-
-def script_unload():
-    log(
-        "Unloading script..."
-    )
-
-    stop_event.set()
-
-    if ws_conn:
-        try:
-            ws_conn.close()
-        except Exception:
-            pass
-
-    if ws_thread:
-        ws_thread.join(
-            timeout=3
-        )
 
     stop_mediamtx()
 
-    log(
-        "Script unloaded."
+    return
+
+
+def listen_loop():
+  global ws_conn
+
+  delay = RECONNECT_MIN_DELAY
+
+  while not stop_event.is_set():
+
+    try:
+      log(
+        f"Connecting to OBS WebSocket "
+        f"({WS_HOST}:{WS_PORT})..."
+      )
+
+      ws_conn = connect_and_identify()
+
+      log(
+        "Connected and subscribed to events."
+      )
+
+      delay = RECONNECT_MIN_DELAY
+
+      ws_conn.settimeout(
+        1.0
+      )
+
+      while not stop_event.is_set():
+
+        try:
+          raw = ws_conn.recv()
+
+        except websocket.WebSocketTimeoutException:
+          continue
+
+        if not raw:
+          raise ConnectionError(
+            "Connection closed by OBS"
+          )
+
+        try:
+          msg = json.loads(
+            raw
+          )
+
+        except json.JSONDecodeError:
+          continue
+
+        if msg.get("op") == 5:
+          handle_event(msg)
+
+    except Exception as e:
+
+      if not stop_event.is_set():
+        log(
+          f"Connection lost/failed: "
+          f"{e!r}. "
+          f"Retrying in {delay}s..."
+        )
+
+    finally:
+
+      if ws_conn:
+        try:
+          ws_conn.close()
+        except Exception:
+          pass
+
+        ws_conn = None
+
+    if stop_event.wait(
+      delay
+    ):
+      break
+
+    delay = min(
+      delay * 2,
+      RECONNECT_MAX_DELAY
     )
 
 
+def script_load(settings):
+  global ws_thread
+
+  print("")
+  print(
+    f"{LOG_PREFIX} ==========================="
+  )
+  print(
+    f"{LOG_PREFIX} MEDIAMTX AUTO START/STOP"
+  )
+  print(
+    f"{LOG_PREFIX} ==========================="
+  )
+
+  if not WS_PASSWORD:
+    log(
+      "WARNING: WS_PASSWORD is not configured"
+    )
+
+  if not os.path.isfile(MEDIAMTX_BIN):
+    log(
+      f"WARNING: mediamtx not found at "
+      f"'{MEDIAMTX_BIN}'"
+    )
+
+  if not os.path.isfile(MEDIAMTX_CONFIG):
+    log(
+      f"WARNING: mediamtx.yml not found at "
+      f"'{MEDIAMTX_CONFIG}'"
+    )
+
+  log(
+    f"WebSocket: {WS_HOST}:{WS_PORT}"
+  )
+
+  log(
+    f"Watched output: '{OUTPUT_NAME}'"
+  )
+
+  log(
+    f"MediaMTX executable: "
+    f"'{MEDIAMTX_BIN}'"
+  )
+
+  log(
+    f"MediaMTX config: "
+    f"'{MEDIAMTX_CONFIG}'"
+  )
+
+  stop_event.clear()
+
+  ws_thread = threading.Thread(
+    target=listen_loop,
+    daemon=True
+  )
+
+  ws_thread.start()
+
+
+def script_unload():
+  log(
+    "Unloading script..."
+  )
+
+  stop_event.set()
+
+  if ws_conn:
+    try:
+      ws_conn.close()
+    except Exception:
+      pass
+
+  if ws_thread:
+    ws_thread.join(
+      timeout=3
+    )
+
+  stop_mediamtx()
+
+  log(
+    "Script unloaded."
+  )
+
+
 def script_description():
-    return """
+  return """
 Aitum MediaMTX Auto Start/Stop
 
 Monitors the Aitum Stream Suite output "DELAY".
@@ -544,11 +544,11 @@ and stops when the output stops.
 Expected directory structure:
 
 <script_dir>/
-    script.py
-    .env
-    mediamtx/
-        mediamtx.exe
-        mediamtx.yml
+  script.py
+  .env
+  mediamtx/
+    mediamtx.exe
+    mediamtx.yml
 
 .env:
 
